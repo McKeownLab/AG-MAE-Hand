@@ -58,35 +58,39 @@ def calc_segments_lengths(hand_poses):
 
 def calc_joints_angles(hand_poses, root_index):
     '''
-    calculates the angles in radian between different hand joints given the root as reference,
-    i.e. for each i and j the angles are computed between the lines (root index, index i) and (root index, index j)
+    Calculates the angles in radians between different hand joints given the root as reference.
+    For each pair of joints, computes the angle between the vectors (root, joint_i) and (root, joint_j).
 
     Params:
-        - hand_poses (tensor): a batch of hand poses sequences, shape (batch_size, num_frames, num_joints, 3)
-        - root_index (int): the index of the root joint.
+        - hand_poses (tensor): shape (B, T, N, 3), batch of hand pose sequences.
+        - root_index (int): index of the root joint.
 
     Returns:
-        - thetas (tensor): a tensor of shape (B, T, N, N)
-         contains the angles between each pair of hand joints.
+        - thetas (tensor): shape (B, T, N, N), angles between pairs of joints in radians.
     '''
-    ## extract root pose for all frames
+    # Extract root pose and joint coordinates
     root_pose = hand_poses[:, :, root_index, :2].unsqueeze(2)  # Shape: (B, T, 1, 2)
-
-    ## extract (x, y) coordinates from pose for all frames
     poses_xy = hand_poses[:, :, :, :2]  # Shape: (B, T, N, 2)
 
-    ## compute direction vectors for all pairs of joints for all frames
-    diff = poses_xy - root_pose  # Shape: (B, T, N, 2)
+    # Compute vectors from root to each joint
+    vectors = poses_xy - root_pose  # Shape: (B, T, N, 2)
 
-    ## compute slopes of the lines
-    m1 = diff[:, :, :, 1] / (diff[:, :, :, 0]+1e-6)  # Shape: (B, T, N)
-    m2 = m1.unsqueeze(2)  # Shape: (B, T, 1, N)
+    # Normalize vectors to unit length
+    norms = torch.norm(vectors, dim=-1, keepdim=True) + 1e-6  # Avoid division by zero
+    unit_vectors = vectors / norms  # Shape: (B, T, N, 2)
 
-    ## compute the angle between the two lines
-    tan_thetas = (m2 - m1.unsqueeze(3)) / (1 + m1.unsqueeze(3) * m2)
-    thetas = torch.atan(tan_thetas).abs()
+    # Compute dot product between all pairs of unit vectors
+    dot_products = torch.matmul(unit_vectors, unit_vectors.transpose(-2, -1))  # Shape: (B, T, N, N)
+
+    # Clamp values to [-1, 1] to avoid numerical errors in acos
+    dot_products = torch.clamp(dot_products, -1.0, 1.0)
+
+    # Compute angles using arccos
+    thetas = torch.acos(dot_products)  # Shape: (B, T, N, N)
 
     return thetas
+
+
 
 
 def get_data_stats(data_loader, root_index):
@@ -96,7 +100,7 @@ def get_data_stats(data_loader, root_index):
     all_angles = []
     all_lengths = []
     
-    for d in tqdm(data_loader, desc='calculating data stats....', colour='green'):
+    for d in tqdm(data_loader, desc='calculating data stats....' ):
         P = d['Sequence']
         
         angles = calc_joints_angles(P, root_index)
@@ -120,6 +124,7 @@ def get_data_stats(data_loader, root_index):
     lengths_stats = {'min': min_lenghts,
                      'max': max_lenghts} 
     
+    #assert False , angles_stats
     return angles_stats, lengths_stats
 
 
