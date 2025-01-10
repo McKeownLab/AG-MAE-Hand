@@ -9,7 +9,7 @@ from utils.visualize import display_sample
 def train_epoch(epoch, num_epochs, model, optimizer, dataloader, device, scheduler=None):
     model.train()
     train_loss = 0
-    pbar = tqdm(dataloader, total=len(dataloader), desc=f'[%.3g/%.3g]' % (epoch, num_epochs), colour='green')
+    pbar = tqdm(dataloader, total=len(dataloader), desc=f'[%.3g/%.3g]' % (epoch, num_epochs) )
     for d in pbar:
         seq = d['Sequence'].to(device).float()
         optimizer.zero_grad()               
@@ -19,6 +19,7 @@ def train_epoch(epoch, num_epochs, model, optimizer, dataloader, device, schedul
         optimizer.step()
         train_loss += loss.item()
         pbar.set_postfix(train_loss=f'{train_loss:.2f}')
+
         
     if scheduler is not None:
         scheduler.step()
@@ -30,7 +31,7 @@ def valid_epoch(model, dataloader, device):
     valid_loss = 0.0
 
     with torch.no_grad():
-        pbar = tqdm(dataloader, total=len(dataloader), desc='[VALID]', colour='green')
+        pbar = tqdm(dataloader, total=len(dataloader), desc='[VALID]' )
         for d in pbar:
             seq = d['Sequence'].to(device).float()         
             *_, loss = model(seq)
@@ -71,6 +72,6 @@ def stmae_training_loop(model, train_loader, valid_loader, device, optimizer, sc
 
         out = next(iter(valid_loader))
         display_sample(model, out['Sequence'].to(device).float(), 
-                        valid_loader.dataset.joints_connections,
+                        args.data.joints_connections,
                         fname=opt.join(img_save_folder_path, 'epoch_{}.png'.format(epoch)),
                         show=False)

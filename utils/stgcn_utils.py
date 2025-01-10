@@ -18,7 +18,7 @@ def train_one_epoch(epoch, num_epochs, model, stmae, dataloader, optimizer, crit
 	stmae.eval()
 	train_loss = 0
 
-	pbar = tqdm(dataloader, total=len(dataloader), desc=f'[%.3g/%.3g]' % (epoch, num_epochs), colour='green')
+	pbar = tqdm(dataloader, total=len(dataloader), desc=f'[%.3g/%.3g]' % (epoch, num_epochs) )
 	
 	for d in pbar:
 		seq = d['Sequence'].to(device).contiguous().float()
@@ -52,7 +52,7 @@ def valid_one_epoch(model, stmae, dataloader, criterion, device):
 	model.eval()
 	stmae.eval()
 	with torch.no_grad():
-		pbar = tqdm(dataloader, total=len(dataloader), desc='[VALID]', colour='green')
+		pbar = tqdm(dataloader, total=len(dataloader), desc='[VALID]' )
 		
 		for d in pbar:
 			seq = d['Sequence'].to(device).contiguous().float()

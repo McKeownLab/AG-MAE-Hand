@@ -2,7 +2,7 @@ matplotlib
 seaborn
 omegaconf
 scikit-learn
-tqdm==4.66.1
+tqdm
 torch==1.13.0
 torchvision==0.2.2
 torchaudio==0.13.0 

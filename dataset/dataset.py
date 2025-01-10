@@ -1,15 +1,14 @@
-import numpy as np
-
+import numpy as n
 import torch
 from torch.utils.data import Dataset, DataLoader
-
 import os
 from tqdm import tqdm
 import glob
 import sys
 import os.path as opt
 from omegaconf import OmegaConf
-
+import  numpy as np
+import pandas as pd
 
 def random_rotation(skel, ang):
 	cos_ang = torch.cos(ang)
@@ -21,98 +20,188 @@ def random_rotation(skel, ang):
 
 
 class PreTrainingDataset(Dataset):
-	def __init__(
-		self,
-		data_dir,
-		window_size,
-		step,
-		info,
-		normalize=False,
-		random_rot=False
-	):
-		"""
-		Parameters:
-		data_dir (str): path to the dataset directory
-		window_size (int): sliding window size
-		step (int): stride for sliding window
-		normalize (bool): to normalize data using train split mean and variance
+    def __init__(
+        self,
+        data_dir,
+        window_size,
+        step,
+        info,
+        normalize=False,
+        random_rot=False
+    ):
+        """
+        Parameters:
+        data_dir (str): path to the dataset directory
+        window_size (int): sliding window size
+        step (int): stride for sliding window
+        normalize (bool): to normalize data using train split mean and variance
 
-		mean (list): list of 3 floats indicating the mean of each coordinates (x, y, z). 
-		std (list): list of 3 floats indicating the std of each coordinates (x, y, z). 
+        mean (list): list of 3 floats indicating the mean of each coordinates (x, y, z).
+        std (list): list of 3 floats indicating the std of each coordinates (x, y, z).
 
-		/!\\ => mean & std Should be provided if normalize is True
-		"""
-		self.data_dir = data_dir
-		self.window_size = window_size
-		self.step = step
-		self.normalize = normalize
-		self.random_rot = random_rot
+        /!\\ => mean & std Should be provided if normalize is True
+        """
+        self.data_dir = data_dir
+        self.window_size = window_size
+        self.step = step
+        self.normalize = normalize
+        self.random_rot = random_rot
 
-		self.dataset_name = info['dataset']
-		if normalize:
-			mean = torch.tensor(info['mean'], dtype=torch.float64)
-			std = torch.tensor(info['std'], dtype=torch.float64)
-			self.mean = mean.unsqueeze(0).unsqueeze(0)  # window_size, joints, coords
-			self.std = std.unsqueeze(0).unsqueeze(0)  # window_size, joints, coords
+        self.dataset_name = info['dataset']
+        if normalize:
+            mean = torch.tensor(info['mean'], dtype=torch.float64)
+            std = torch.tensor(info['std'], dtype=torch.float64)
+            self.mean = mean.unsqueeze(0).unsqueeze(0)  # window_size, joints, coords
+            self.std = std.unsqueeze(0).unsqueeze(0)  # window_size, joints, coords
 
-		self.label_map = info['label_map']
-		self.joints_connections = info['joints_connections']
-		self.n_joints = info['n_joints']
-		self.load_data()
+        self.n_joints = 21  # Number of joints in Mediapipe hand landmarks
+        self.load_data()
 
-	def load_data(self):
+    def load_data(self):
+        """
+        Load and process the CSV files in the dataset directory.
+        """
+        self.sequences = []
 
-		self.sequences = []
+        # Glob all CSV files in the directory
+        csv_files = glob.glob(os.path.join(self.data_dir, "*.csv"))
+        pbar = tqdm(csv_files, desc="Loading Pre-Training Dataset...")
 
-		with open(opt.join(self.data_dir, "annotations.txt"), "r") as annotations:
-			## annotations should follow this format
-			# sequence_Id;gesture_1;start_frame;end_frame;...;gesture_n;start_frame;end_frame;"
-			# ...
-			pbar = tqdm(annotations.readlines(), desc="Loading Pre-Training {} Dataset....".format(self.dataset_name), colour='green')
-			for line in pbar:
-				line = line.split(";")
-				file_name = line[0]
-				data = line[1:-1]
+        for file in pbar:
+            # Read the CSV file
+            data = pd.read_csv(file)
 
-				sequence_data = []
+            # Extract hand landmark coordinates (x, y, z for each joint)
+            # Assumes columns start with x_0, y_0, z_0, ... up to x_20, y_20, z_20
+            landmarks = data.iloc[:, 5:].values  # Skip first 5 columns
+            landmarks = landmarks.reshape(-1, self.n_joints, 3).astype(np.float64)
 
-				with open(opt.join(self.data_dir, f"{file_name}.txt"), "r") as fd:
-					for line_idx, line_ in enumerate(fd.readlines()):
-						line_ = line_.split(";")[1:-1]  # remove index and end-of-line
-						line_ = np.reshape(line_, (self.n_joints, 3)).astype(np.float64)  
-						sequence_data.append(line_)
+            # Generate windows of size `window_size` with stride `step`
+            for cursor in range(0, landmarks.shape[0] - self.window_size + 1, self.step):
+                window = landmarks[cursor:cursor + self.window_size, :, :]
+                self.sequences.append(window)
 
-				sequence_data = np.array(sequence_data).astype(np.float64)
-				# generate windows of size W for current gesture
-				for cursor in range(0, sequence_data.shape[0] - self.window_size, self.step):
-					self.sequences.append(sequence_data[cursor : cursor + self.window_size, :, :])
+    def __len__(self):
+        return len(self.sequences)
+
+    def _normalize(self, x):
+        """
+        Normalize data with train mean and variance.
+        """
+        return (x - self.mean) / self.std
+
+    def _preprocess(self, sequence: np.ndarray):
+        """
+        Preprocess the sequences.
+        """
+        sequence_tensor = torch.from_numpy(sequence).float()
+        if self.normalize:
+            sequence_tensor = self._normalize(sequence_tensor)
+        return sequence_tensor
+
+    def __getitem__(self, index):
+        sequence = self.sequences[index]
+        sequence = self._preprocess(sequence)
+        if self.random_rot:
+            sequence = random_rotation(sequence, torch.randint(0, 360, size=(1,)))
+
+        return dict(Sequence=sequence)
+
+
+
+# class PreTrainingDataset(Dataset):
+# 	def __init__(
+# 		self,
+# 		data_dir,
+# 		window_size,
+# 		step,
+# 		info,
+# 		normalize=False,
+# 		random_rot=False
+# 	):
+# 		"""
+# 		Parameters:
+# 		data_dir (str): path to the dataset directory
+# 		window_size (int): sliding window size
+# 		step (int): stride for sliding window
+# 		normalize (bool): to normalize data using train split mean and variance
+
+# 		mean (list): list of 3 floats indicating the mean of each coordinates (x, y, z). 
+# 		std (list): list of 3 floats indicating the std of each coordinates (x, y, z). 
+
+# 		/!\\ => mean & std Should be provided if normalize is True
+# 		"""
+# 		self.data_dir = data_dir
+# 		self.window_size = window_size
+# 		self.step = step
+# 		self.normalize = normalize
+# 		self.random_rot = random_rot
+
+# 		self.dataset_name = info['dataset']
+# 		if normalize:
+# 			mean = torch.tensor(info['mean'], dtype=torch.float64)
+# 			std = torch.tensor(info['std'], dtype=torch.float64)
+# 			self.mean = mean.unsqueeze(0).unsqueeze(0)  # window_size, joints, coords
+# 			self.std = std.unsqueeze(0).unsqueeze(0)  # window_size, joints, coords
+
+# 		self.label_map = info['label_map']
+# 		self.joints_connections = info['joints_connections']
+# 		self.n_joints = info['n_joints']
+# 		self.load_data()
+
+# 	def load_data(self):
+
+# 		self.sequences = []
+
+# 		with open(opt.join(self.data_dir, "annotations.txt"), "r") as annotations:
+# 			## annotations should follow this format
+# 			# sequence_Id;gesture_1;start_frame;end_frame;...;gesture_n;start_frame;end_frame;"
+# 			# ...
+# 			pbar = tqdm(annotations.readlines(), desc="Loading Pre-Training {} Dataset....\033[0m".format(self.dataset_name))
+# 			for line in pbar:
+# 				line = line.split(";")
+# 				file_name = line[0]
+# 				data = line[1:-1]
+
+# 				sequence_data = []
+
+# 				with open(opt.join(self.data_dir, f"{file_name}.txt"), "r") as fd:
+# 					for line_idx, line_ in enumerate(fd.readlines()):
+# 						line_ = line_.split(";")[1:-1]  # remove index and end-of-line
+# 						line_ = np.reshape(line_, (self.n_joints, 3)).astype(np.float64)  
+# 						sequence_data.append(line_)
+
+# 				sequence_data = np.array(sequence_data).astype(np.float64)
+# 				# generate windows of size W for current gesture
+# 				for cursor in range(0, sequence_data.shape[0] - self.window_size, self.step):
+# 					self.sequences.append(sequence_data[cursor : cursor + self.window_size, :, :])
 
 					
-	def __len__(self):
-		return len(self.sequences)
+# 	def __len__(self):
+# 		return len(self.sequences)
 
-	def _normalize(self, x):
-		'''
-		normalize data with train mean and variance 
-		'''
-		return (x - self.mean) / self.std
+# 	def _normalize(self, x):
+# 		'''
+# 		normalize data with train mean and variance 
+# 		'''
+# 		return (x - self.mean) / self.std
 
-	def _preprocess(self, sequence: np.ndarray):
-		'''
-		preprocessing the sequences
-		'''
-		sequence_tensor = torch.from_numpy(sequence).float()
-		if self.normalize:
-			sequence_tensor = self._normalize(sequence_tensor)
-		return sequence_tensor
+# 	def _preprocess(self, sequence: np.ndarray):
+# 		'''
+# 		preprocessing the sequences
+# 		'''
+# 		sequence_tensor = torch.from_numpy(sequence).float()
+# 		if self.normalize:
+# 			sequence_tensor = self._normalize(sequence_tensor)
+# 		return sequence_tensor
 
-	def __getitem__(self, index):
-		sequence = self.sequences[index]
-		sequence = self._preprocess(sequence)
-		if self.random_rot:
-			sequence = random_rotation(sequence, torch.randint(0, 360, size=(1,)))
+# 	def __getitem__(self, index):
+# 		sequence = self.sequences[index]
+# 		sequence = self._preprocess(sequence)
+# 		if self.random_rot:
+# 			sequence = random_rotation(sequence, torch.randint(0, 360, size=(1,)))
 
-		return dict(Sequence=sequence)
+# 		return dict(Sequence=sequence)
 
 
 class OfflineDataset(Dataset):
@@ -158,7 +247,7 @@ class OfflineDataset(Dataset):
 			## annotations should follow this format
 			# sequence_Id;gesture_1;start_frame;end_frame;...;gesture_n;start_frame;end_frame;"
 			# ...
-			pbar = tqdm(annotations.readlines(), desc="Loading Offline {} Dataset....".format(self.dataset_name), colour='green')
+			pbar = tqdm(annotations.readlines(), desc="Loading Offline {} Dataset....\033[0m".format(self.dataset_name))
 			for line in pbar:
 				line = line.split(";")
 				file_name = line[0]
@@ -276,7 +365,7 @@ class OnlineTrainingDataset(Dataset):
 			## annotations should follow this format
 			# sequence_Id;gesture_1;start_frame;end_frame;...;gesture_n;start_frame;end_frame;"
 			# ...
-			pbar = tqdm(annotations.readlines(), desc="Loading Online Training {} Dataset....".format(self.dataset_name), colour='green')
+			pbar = tqdm(annotations.readlines(), desc="Loading Online Training {} Dataset....".format(self.dataset_name) )
 			for line in pbar:
 				line = line.split(";")
 				file_name = line[0]
@@ -435,7 +524,7 @@ class OnlineEvalDataset(Dataset):
 			## annotations should follow this format
 			# sequence_Id;gesture_1;start_frame;end_frame;...;gesture_n;start_frame;end_frame;"
 			# ...
-			pbar = tqdm(annotations.readlines(), desc="Loading Online Evalaution {} Dataset....".format(self.dataset_name), colour='green')
+			pbar = tqdm(annotations.readlines(), desc="Loading Online Evalaution {} Dataset....".format(self.dataset_name))
 			for line in pbar:
 				line = line.split(";")
 				file_name = line[0]

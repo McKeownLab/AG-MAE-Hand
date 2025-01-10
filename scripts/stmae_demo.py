@@ -25,7 +25,7 @@ from utils.visualize import display_sample
 if __name__ == '__main__':
 
 	parser = argparse.ArgumentParser(description='Demo STMAE')
-	parser.add_argument('--cfg_path', default='configs/train_STMAE.yaml', help='Path to the train.yaml config')
+	parser.add_argument('--cfg_path', default='configs/asl.yaml', help='Path to the train.yaml config')
 	parser.add_argument('--file_idx', help='sequence index to display')
 	args = parser.parse_args()
 	## configs

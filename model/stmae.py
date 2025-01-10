@@ -587,6 +587,7 @@ class STMAE(nn.Module):
         mask_tokens = decoded_tokens[:, :num_masked]
         skel_masked_pred = self.to_prediction(mask_tokens)
 
+
         # calculate reconstruction loss
         recon_loss = F.mse_loss(skel_masked_pred, skel_masked)
         if self.anatomical_loss is not None:
@@ -595,6 +596,17 @@ class STMAE(nn.Module):
             rec_x = rearrange(rec_x, 'b (f n) d -> b f n d', f=self.window_size)
             ang_loss, len_loss = self.anatomical_loss(rec_x)
             recon_loss = recon_loss + lambda_anatomic * (ang_loss + len_loss)
+            #print(skel_masked_pred)
+            if torch.isnan(recon_loss).any():
+                print("NaN detected in recon_loss!")
+                print("Input x:", x)
+                print("Masked indices:", masked_indices)
+                print("Skeleton masked prediction:", skel_masked_pred)
+                print("Reconstructed x:", rec_x)
+                print("Angular loss:", ang_loss)
+                print("Length loss:", len_loss)
+                raise ValueError("Recon loss contains NaNs. Debug the inputs and anatomical_loss.")
+        
         return skel_masked_pred, skel_masked, masked_indices, recon_loss
 
     def change_ratio(self, ratio):

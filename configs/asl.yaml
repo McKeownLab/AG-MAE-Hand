@@ -6,19 +6,19 @@ save_folder_path: './experiments/'
 
 # data config
 data:
- train_data_dir: '/home/atefeh/AG-MAE/data/training_set/'
- test_data_dir: '/home/atefeh/AG-MAE/data/test_set/'
+ train_data_dir: '/home/atefeh/AG-MAE/data/asl/train'
+ test_data_dir: '/home/atefeh/AG-MAE/data/asl/test/'
  step: 1
- normalize: True
- mean: [0.0360228490, -0.0765615106, 0.4257422931]
- std: [0.1018783228, 0.0665624935, 0.0807055109]
- n_joints: 20
+ normalize: False
+ mean: [0, 0, 0]
+ std: [0, 0, 0]
+ n_joints: 21
  label_map: ["ONE", "TWO", "THREE", "FOUR", "OK", "MENU", "LEFT", "RIGHT", "CIRCLE",  "V", "CROSS", "GRAB", "PINCH", "TAP", "DENY", "KNOB", "EXPAND", "NON-GESTURE"]            
- joints_connections: [[0, 1], [1, 2], [2, 3], [0, 4], [4, 5], [5, 6], [6, 7], [0, 8], [8, 9], [9, 10], [10, 11], [0, 12], [12, 13], [13, 14], [14, 15], [0, 16], [16, 17], [17, 18], [18, 19]]
+ joints_connections: [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19],[19, 20],[0,17]]
 
 # stmae model config
 stmae:
- num_joints: 20
+ num_joints: 21
  coords_dim: 3
  encoder_embed_dim: 256
  encoder_depth: 6
