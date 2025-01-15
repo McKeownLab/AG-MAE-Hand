@@ -6,6 +6,7 @@ save_folder_path: './experiments/'
 
 # data config
 data:
+ data_dir: '/home/atefeh/AG-MAE/data/asl/Booth_Results/MAE_finger_tapping/all_pose'
  train_data_dir: '/home/atefeh/AG-MAE/data/asl/train'
  test_data_dir: '/home/atefeh/AG-MAE/data/asl/test/'
  step: 1
@@ -13,7 +14,7 @@ data:
  mean: [0, 0, 0]
  std: [0, 0, 0]
  n_joints: 21
- label_map: ["ONE", "TWO", "THREE", "FOUR", "OK", "MENU", "LEFT", "RIGHT", "CIRCLE",  "V", "CROSS", "GRAB", "PINCH", "TAP", "DENY", "KNOB", "EXPAND", "NON-GESTURE"]            
+ label_map: [0,1,2,3,4]            
  joints_connections: [[0, 1], [1, 2], [2, 3], [3, 4], [0, 5], [5, 6], [6, 7], [7, 8], [5, 9], [9, 10], [10, 11], [11, 12], [9, 13], [13, 14], [14, 15], [15, 16], [13, 17], [17, 18], [18, 19],[19, 20],[0,17]]
 
 # stmae model config

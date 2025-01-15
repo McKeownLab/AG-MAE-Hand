@@ -70,6 +70,8 @@ class PreTrainingDataset(Dataset):
         for file in pbar:
             # Read the CSV file
             data = pd.read_csv(file)
+            
+            data =data.where(data['hand_label'] == 'Right').dropna()
 
             # Extract hand landmark coordinates (x, y, z for each joint)
             # Assumes columns start with x_0, y_0, z_0, ... up to x_20, y_20, z_20
