@@ -6,10 +6,11 @@ save_folder_path: './experiments/'
 
 # data config
 data:
- data_dir: '/home/atefeh/AG-MAE/data/asl/Booth_Results/MAE_finger_tapping/all_pose'
+ data_dir: '/mnt/teamshare-camera/Booth_Results/MAE_finger_tapping/all_pose'
+ label_csv_path: '/mnt/teamshare-camera/Booth_Results/MAE_finger_tapping/predictions.csv'
  train_data_dir: '/home/atefeh/AG-MAE/data/asl/train'
  test_data_dir: '/home/atefeh/AG-MAE/data/asl/test/'
- step: 1
+ step: 4
  normalize: False
  mean: [0, 0, 0]
  std: [0, 0, 0]
@@ -42,7 +43,7 @@ stmae:
 stgcn_offline:
  sequence_length: 80
  task: 'class'
- num_classes: 17
+ num_classes: 5
  num_epochs: 200
  lr: 1e-3
  weight_decay: 0.005

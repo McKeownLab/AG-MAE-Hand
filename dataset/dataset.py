@@ -109,6 +109,106 @@ class PreTrainingDataset(Dataset):
 
         return dict(Sequence=sequence)
 
+class PD_Dataset(Dataset):
+    def __init__(self, data_dir, label_csv_path, window_size, step, normalize=False, random_rot=False):
+        """
+        Parameters:
+        data_dir (str): Path to the directory containing the dataset files.
+        label_csv_path (str): Path to the CSV file containing filenames and their corresponding labels.
+        window_size (int): Sliding window size for extracting sequences.
+        step (int): Step size for the sliding window.
+        normalize (bool): Whether to normalize the data using the mean and std.
+        random_rot (bool): Apply random rotations to the data for augmentation.
+        """
+        self.data_dir = data_dir
+        self.label_csv_path = label_csv_path
+        self.window_size = window_size
+        self.step = step
+        self.normalize = normalize
+        self.random_rot = random_rot
+
+        # Load the labels from the CSV file
+        self.labels_df = pd.read_csv(label_csv_path)
+        self.labels_df.set_index("filename", inplace=True)
+
+        # Load the dataset
+        self.data_files = sorted(glob.glob(os.path.join(data_dir, "*.csv")))
+        self.sequences = []
+        self.labels = []
+        self.indexes = []
+
+        self._load_data()
+
+    def _load_data(self):
+        """
+        Load data from CSV files and create sequences with labels and indexes.
+        """
+        pbar = tqdm(self.data_files, desc="Loading PD Dataset")
+        for file_path in pbar:
+            # Extract filename without extension
+            filename = os.path.basename(file_path).split(".")[0].replace("_finger_tapping", "")
+            if filename not in self.labels_df.index:
+                print(f"Label not found for {filename}. Skipping...")
+                continue
+
+            # Read data and label
+            data = pd.read_csv(file_path)
+            landmarks = data.iloc[:, 5:].values
+            landmarks = landmarks.reshape(-1, 21, 3)  # Assuming 21 joints, each with (x, y, z)
+            label = self.labels_df.loc[filename, "label"]
+            
+            # Skip if the label is not number
+            if label is None or not isinstance(label, (int, float)):
+                continue
+
+            # Generate sequences
+            for start in range(0, len(landmarks) - self.window_size + 1, self.step):
+                sequence = landmarks[start:start + self.window_size]
+                if sequence.shape[0] == self.window_size:
+                    if sequence.shape != (self.window_size, 21, 3):
+                        print(f"Sequence size: {sequence.shape}")
+                    self.sequences.append(sequence)
+                    self.labels.append(label)
+                    self.indexes.append(filename)
+
+    def _normalize(self, sequence):
+        """
+        Normalize the data (if enabled).
+        """
+        mean = np.mean(sequence, axis=(0, 1))
+        std = np.std(sequence, axis=(0, 1))
+        return (sequence - mean) / std
+
+    def _random_rotation(self, sequence):
+        """
+        Apply random rotation for data augmentation.
+        """
+        angle = np.random.uniform(0, 2 * np.pi)
+        cos_theta = np.cos(angle)
+        sin_theta = np.sin(angle)
+        rotation_matrix = np.array([[cos_theta, -sin_theta], [sin_theta, cos_theta]])
+
+        sequence[..., :2] = np.dot(sequence[..., :2], rotation_matrix)
+        return sequence
+
+    def __len__(self):
+        return len(self.sequences)
+
+    def __getitem__(self, index):
+        sequence = self.sequences[index]
+        label = self.labels[index]
+        data_index = self.indexes[index]
+
+        # Normalize and augment
+        if self.normalize:
+            sequence = self._normalize(sequence)
+        if self.random_rot:
+            sequence = self._random_rotation(sequence)
+
+        sequence_tensor = torch.from_numpy(sequence).float()
+        label_tensor = torch.tensor(label).float()
+
+        return dict(Sequence=sequence_tensor, Label=label_tensor, Index=data_index)
 
 
 # class PreTrainingDataset(Dataset):

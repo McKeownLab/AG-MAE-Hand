@@ -1,11 +1,12 @@
 import os
 import torch
 from torch.utils.data import DataLoader
-from dataset.dataset import PreTrainingDataset
+from dataset.dataset import PD_Dataset
 from model.stmae import STMAE, Encoder
 import numpy as np
 from tqdm import tqdm
 from omegaconf import OmegaConf
+import pickle
 
 def load_pretrained_stmae(cfg, device):
     """Load pre-trained STMAE model from a checkpoint."""
@@ -46,20 +47,35 @@ def load_pretrained_stmae(cfg, device):
     stmae.eval()
     return stmae
 
-def generate_embeddings(stmae, dataloader, device):
-    """Generate embeddings for the dataset using the STMAE model."""
+def generate_embeddings_with_metadata(stmae, dataloader, device):
+    """Generate embeddings for the dataset along with labels and indexes."""
     embeddings = []
+    labels = []
+    indexes = []
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Generating Embeddings"):
             sequences = batch["Sequence"].to(device).float()
             encoded = stmae.inference(sequences)
-            embeddings.append(encoded.cpu().numpy())
-    return np.concatenate(embeddings, axis=0)
 
-def save_embeddings(embeddings, output_path):
-    """Save embeddings to a file."""
-    np.save(output_path, embeddings)
-    print(f"Embeddings saved to {output_path}")
+            embeddings.append(encoded.cpu().numpy())
+            labels.extend(batch["Label"].cpu().numpy())
+            indexes.extend(batch["Index"])  # Assuming `Index` is a list or dictionary
+    return (
+        np.concatenate(embeddings, axis=0),
+        np.array(labels),
+        indexes,
+    )
+
+def save_embeddings_with_metadata(embeddings, labels, indexes, output_path):
+    """Save embeddings, labels, and indexes to a file using pickle."""
+    data_to_save = {
+        "embeddings": embeddings,
+        "labels": labels,
+        "indexes": indexes,
+    }
+    with open(output_path, "wb") as f:
+        pickle.dump(data_to_save, f, protocol=4)  # Use protocol 4 for large files
+    print(f"Embeddings, labels, and indexes saved to {output_path}")
 
 if __name__ == "__main__":
     # Configuration
@@ -68,28 +84,22 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Dataset
-    dataset = PreTrainingDataset(
+    dataset = PD_Dataset(
         data_dir=cfg.data.data_dir,
+        label_csv_path=cfg.data.label_csv_path,
         window_size=cfg.stmae.window_size,
         step=cfg.data.step,
         normalize=cfg.data.normalize,
-        info={
-            "dataset": cfg.dataset,
-            "n_joints": cfg.data.n_joints,
-            "mean": cfg.data.mean,
-            "std": cfg.data.std,
-            "joints_connections": cfg.data.joints_connections,
-            "label_map": cfg.data.label_map,
-        },
+        random_rot=True,
     )
     dataloader = DataLoader(dataset, batch_size=cfg.stmae.batch_size, shuffle=False)
 
     # Load STMAE model
     stmae = load_pretrained_stmae(cfg, device)
 
-    # Generate embeddings
-    embeddings = generate_embeddings(stmae, dataloader, device)
+    # Generate embeddings with metadata
+    embeddings, labels, indexes = generate_embeddings_with_metadata(stmae, dataloader, device)
 
-    # Save embeddings
-    output_path = os.path.join(cfg.save_folder_path, cfg.dataset, cfg.exp_name, "stmae_embeddings_pd.npy")
-    save_embeddings(embeddings, output_path)
+    # Save embeddings with metadata
+    output_path = os.path.join(cfg.save_folder_path, cfg.dataset, cfg.exp_name, "stmae_embeddings_pd_2.npy")
+    save_embeddings_with_metadata(embeddings, labels, indexes, output_path)
