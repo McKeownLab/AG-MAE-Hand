@@ -11,6 +11,7 @@ data:
  train_data_dir: '/home/atefeh/AG-MAE/data/asl/train'
  test_data_dir: '/home/atefeh/AG-MAE/data/asl/test/'
  step: 4
+ sequence_length: 400
  normalize: False
  mean: [0, 0, 0]
  std: [0, 0, 0]
@@ -37,10 +38,10 @@ stmae:
  num_epochs: 200
  lr: 1e-3
  weight_decay: 0.05
- batch_size: 128
+ batch_size: 16
 
 ## offline stgcn model configs
-stgcn_offline:
+parkinson_stgcn:
  sequence_length: 80
  task: 'class'
  num_classes: 5
@@ -49,14 +50,3 @@ stgcn_offline:
  weight_decay: 0.005
  batch_size: 8
  
-## online stgcn model configs
-stgcn_online:
- window_size: 16
- min_seq_length: 80
- max_seq_length: 10
- task: 'both'
- num_classes: 18
- num_epochs: 30
- lr: 1e-3
- weight_decay: 0.005
- batch_size: 128

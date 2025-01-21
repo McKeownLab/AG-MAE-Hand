@@ -110,7 +110,7 @@ class PreTrainingDataset(Dataset):
         return dict(Sequence=sequence)
 
 class PD_Dataset(Dataset):
-    def __init__(self, data_dir, label_csv_path, window_size, step, normalize=False, random_rot=False):
+    def __init__(self, data_dir, label_csv_path, sequence_length, normalize=False, random_rot=False):
         """
         Parameters:
         data_dir (str): Path to the directory containing the dataset files.
@@ -122,10 +122,9 @@ class PD_Dataset(Dataset):
         """
         self.data_dir = data_dir
         self.label_csv_path = label_csv_path
-        self.window_size = window_size
-        self.step = step
         self.normalize = normalize
         self.random_rot = random_rot
+        self.sequence_length = sequence_length
 
         # Load the labels from the CSV file
         self.labels_df = pd.read_csv(label_csv_path)
@@ -162,14 +161,9 @@ class PD_Dataset(Dataset):
                 continue
 
             # Generate sequences
-            for start in range(0, len(landmarks) - self.window_size + 1, self.step):
-                sequence = landmarks[start:start + self.window_size]
-                if sequence.shape[0] == self.window_size:
-                    if sequence.shape != (self.window_size, 21, 3):
-                        print(f"Sequence size: {sequence.shape}")
-                    self.sequences.append(sequence)
-                    self.labels.append(label)
-                    self.indexes.append(filename)
+            self.sequences.append(landmarks)
+            self.labels.append(label)
+            self.indexes.append(filename)
 
     def _normalize(self, sequence):
         """
@@ -196,6 +190,7 @@ class PD_Dataset(Dataset):
 
     def __getitem__(self, index):
         sequence = self.sequences[index]
+        sequence = self._preprocess(sequence)
         label = self.labels[index]
         data_index = self.indexes[index]
 
@@ -205,11 +200,27 @@ class PD_Dataset(Dataset):
         if self.random_rot:
             sequence = self._random_rotation(sequence)
 
-        sequence_tensor = torch.from_numpy(sequence).float()
         label_tensor = torch.tensor(label).float()
 
-        return dict(Sequence=sequence_tensor, Label=label_tensor, Index=data_index)
+        return dict(Sequence=sequence, Label=label_tensor, Index=data_index)
+    
+    def pad_sequence(self, seq, target_length):
+        seq_len = seq.shape[0]
+        if seq_len >= target_length:
+            return seq[:target_length]
+        pad_len = target_length - seq_len
+        padding = torch.zeros((pad_len, *seq.shape[1:]), dtype=seq.dtype)
+        return torch.cat([seq, padding], dim=0)
 
+    def _preprocess(self, sequence: np.ndarray):
+        '''
+        preprocessing the sequences
+        '''
+        sequence_tensor = torch.from_numpy(sequence).float()
+        if self.normalize:
+            sequence_tensor = self._normalize(sequence_tensor)
+        sequence_tensor = self.pad_sequence(sequence_tensor, self.sequence_length)
+        return sequence_tensor
 
 # class PreTrainingDataset(Dataset):
 # 	def __init__(

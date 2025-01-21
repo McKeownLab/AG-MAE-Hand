@@ -52,8 +52,10 @@ def generate_embeddings_with_metadata(stmae, dataloader, device):
     embeddings = []
     labels = []
     indexes = []
+    stmae.eval()
     with torch.no_grad():
         for batch in tqdm(dataloader, desc="Generating Embeddings"):
+            
             sequences = batch["Sequence"].to(device).float()
             encoded = stmae.inference(sequences)
 
@@ -87,10 +89,9 @@ if __name__ == "__main__":
     dataset = PD_Dataset(
         data_dir=cfg.data.data_dir,
         label_csv_path=cfg.data.label_csv_path,
-        window_size=cfg.stmae.window_size,
-        step=cfg.data.step,
+        sequence_length =cfg.data.sequence_length,
         normalize=cfg.data.normalize,
-        random_rot=True,
+        random_rot=False,
     )
     dataloader = DataLoader(dataset, batch_size=cfg.stmae.batch_size, shuffle=False)
 
