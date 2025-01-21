@@ -1,0 +1,12 @@
+['embeddings', 'labels', 'indexes']
+{0.0, 1.0, 2.0, 3.0, 4.0}
+0.0: 8432
+2.0: 21431
+3.0: 26755
+1.0: 9342
+4.0: 975
+---------------------
+type(embeddings)) = <class 'numpy.ndarray'>
+type(labels)) = <class 'numpy.ndarray'>
+type(indexes)) = <class 'list'>
+keys: ['embeddings', 'labels', 'indexes']
