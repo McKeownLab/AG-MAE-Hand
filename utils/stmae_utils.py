@@ -41,7 +41,7 @@ def valid_epoch(model, dataloader, device):
     return valid_loss
 
 
-def stmae_training_loop(model, train_loader, valid_loader, device, optimizer, scheduler, args):
+def stmae_training_loop(model, train_loader, valid_loader, device, optimizer, scheduler, wandb_logger , args):
 
     save_folder_path = opt.join(args.save_folder_path, args.dataset, args.exp_name,'weights/')
     img_save_folder_path = opt.join(args.save_folder_path, args.dataset, args.exp_name, 'reconstucted/')
@@ -75,3 +75,13 @@ def stmae_training_loop(model, train_loader, valid_loader, device, optimizer, sc
                         args.data.joints_connections,
                         fname=opt.join(img_save_folder_path, 'epoch_{}.png'.format(epoch)),
                         show=False)
+        # Log to WandB
+        if wandb_logger:
+            wandb_logger.log({
+                "epoch": epoch + 1,
+                "train_loss": train_loss,
+                "val_loss": valid_loss,
+            })
+
+        print(f"Epoch {epoch + 1}/{args.stmae.num_epochs}, Train Loss: {train_loss}, Val Loss: {valid_loss}")
+    

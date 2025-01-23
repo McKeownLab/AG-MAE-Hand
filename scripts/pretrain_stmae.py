@@ -5,19 +5,15 @@ from tqdm import tqdm
 import omegaconf
 from omegaconf import OmegaConf
 import argparse
-
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
-
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 import torch.optim as optim
-
 from dataset.dataset import PreTrainingDataset, OfflineDataset, OnlineTrainingDataset
-
 import os
 import os.path as opt
 import sys
@@ -27,8 +23,8 @@ from model.stmae import STMAE, Encoder
 from utils.stmae_utils import stmae_training_loop
 from model.stgcn import STGCN
 from utils.stgcn_utils import valid_one_epoch, stgcn_offline_training_loop, stgcn_online_training_loop
-
 from anatomical_loss import AnatomicalLoss, get_data_stats, plot_data_stats
+import wandb
 
 
 def seed_everything(seed):
@@ -78,6 +74,54 @@ if __name__ == '__main__':
 		'joints_connections': data_args.joints_connections,
 		'label_map': data_args.label_map,
 	}
+
+
+	# Initialize WandB
+	wandb.init(
+		project="STMAE-Parkinson",
+		name=args.exp_name,  # Use the experiment name from the config
+		config={
+			# Experiment Config
+			"experiment_name": args.exp_name,
+			"seed": args.seed,
+			"dataset": args.dataset,
+			"save_folder_path": args.save_folder_path,
+			
+			# Data Config
+			"train_data_dir": args.data.train_data_dir,
+			"val_data_dir": args.data.val_data_dir,
+			"test_data_dir": args.data.test_data_dir,
+			"step": args.data.step,
+			"normalize": args.data.normalize,
+			"mean": args.data.mean,
+			"std": args.data.std,
+			"n_joints": args.data.n_joints,
+			"label_map": args.data.label_map,
+			"joints_connections": args.data.joints_connections,
+			
+			# STMAE Config
+			"stmae_num_joints": args.stmae.num_joints,
+			"stmae_coords_dim": args.stmae.coords_dim,
+			"stmae_encoder_embed_dim": args.stmae.encoder_embed_dim,
+			"stmae_encoder_depth": args.stmae.encoder_depth,
+			"stmae_num_heads": args.stmae.num_heads,
+			"stmae_mlp_dim": args.stmae.mlp_dim,
+			"stmae_decoder_dim": args.stmae.decoder_dim,
+			"stmae_decoder_depth": args.stmae.decoder_depth,
+			"stmae_window_size": args.stmae.window_size,
+			"stmae_masking_strategy": args.stmae.masking_strategy,
+			"stmae_spatial_masking_ratio": args.stmae.spatial_masking_ratio,
+			"stmae_temporal_masking_ratio": args.stmae.temporal_masking_ratio,
+			"stmae_anatomical_loss": args.stmae.anatomical_loss,
+			"stmae_root_index": args.stmae.root_index,
+			"stmae_num_epochs": args.stmae.num_epochs,
+			"stmae_lr": args.stmae.lr,
+			"stmae_weight_decay": args.stmae.weight_decay,
+			"stmae_batch_size": args.stmae.batch_size,
+
+		},
+	)
+
 
 	train_set = PreTrainingDataset(data_dir=data_args.train_data_dir,
 									 window_size=stmae_args.window_size,
@@ -151,7 +195,15 @@ if __name__ == '__main__':
 	n_params = sum(p.numel() for p in stmae.parameters() if p.requires_grad)
 	print("Number of trainable parameters of STMAE: ", n_params)
 
-	stmae_training_loop(stmae, train_loader, valid_loader, device, optimizer, scheduler, args)
+	stmae_training_loop(stmae, train_loader, valid_loader, device, optimizer, scheduler, wandb, args)
+ 	
+	# Log train-validation loss plot to WandB
+	sim_folder = f'{args.save_folder_path}/{args.dataset}/{args.exp_name}'
+	wandb.log({"train_loss_plot": wandb.Image(f'{sim_folder}/train_validation_loss_plot.png')})
+
+	# Save the trained model artifact
+	wandb.save(f'{sim_folder}/model.pth')
+	wandb.finish()
 
 
 	
