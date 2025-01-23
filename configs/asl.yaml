@@ -1,14 +1,15 @@
 # exp config
-exp_name: 'asl_right_1'
+exp_name: 'asl_together_1'
 seed: 0
-dataset: 'shrec21'
+dataset: 'asl'
 save_folder_path: './experiments/'
 
 # data config
 data:
- train_data_dir: '/home/atefeh/AG-MAE/data/asl/train'
- test_data_dir: '/home/atefeh/AG-MAE/data/asl/test/'
- step: 1
+ train_data_dir: '/home/atefeh/AG-MAE/data/asl/train/gathering'
+ val_data_dir: '/home/atefeh/AG-MAE/data/asl/val/together'
+ test_data_dir: '/home/atefeh/AG-MAE/data/asl/test/together'
+ step: 4
  normalize: False
  mean: [0, 0, 0]
  std: [0, 0, 0]
@@ -26,7 +27,7 @@ stmae:
  mlp_dim: 512
  decoder_dim: 64
  decoder_depth: 6
- window_size: 16
+ window_size: 24
  masking_strategy: 'random'
  spatial_masking_ratio: 0.6
  temporal_masking_ratio: 0.6
@@ -39,7 +40,7 @@ stmae:
 
 ## offline stgcn model configs
 stgcn_offline:
- sequence_length: 80
+ sequence_length: 400
  task: 'class'
  num_classes: 17
  num_epochs: 200
