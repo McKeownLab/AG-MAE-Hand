@@ -1,5 +1,5 @@
 from collections import Counter
-file_path = "indices.txt"
+file_path = "stmae_v1.npy_5GB/indices.txt"
 
 with open(file_path, "r") as f:
     lines = f.read().splitlines()

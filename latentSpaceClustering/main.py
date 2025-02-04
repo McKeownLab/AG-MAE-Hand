@@ -1,12 +1,15 @@
 import numpy as np
 import pandas as pd
+import pickle
+import pickletools
 from collections import Counter
 
-NPY_ADDRESS = 'E:\\university\\Research\\UT-ARIS\\STMAE.npy'
+NPY_ADDRESS = './stmae_v2.npy_943MB/stmae_embeddings_pd_4.npy'
 
-data = np.load(NPY_ADDRESS, allow_pickle=True)
+with open(NPY_ADDRESS, 'rb') as f:
+    data = np.load(NPY_ADDRESS, allow_pickle=True)  # or 'bytes'
 
-# print("Shape:", data.shape)  # Dimensions of the array
+print("Shape:", data.keys())  # Dimensions of the array
 # print("Data type:", data.dtype)  # Data type of the elements
 # print("Array contents:\n", data)  # Optional: Print the full array
 
@@ -39,7 +42,7 @@ print(len(indices))
 
 print("keys:", keys)
 
-with open("indices.txt", "w") as f:
+with open("stmae_v1.npy_5GB/indices.txt", "w") as f:
     for element in indices:
         f.write(f"{element}\n")
 
