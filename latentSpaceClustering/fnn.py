@@ -60,7 +60,7 @@ train_dataset = TensorDataset(X_train_t, y_train_t)
 val_dataset = TensorDataset(X_val_t, y_val_t)
 test_dataset = TensorDataset(X_test_t, y_test_t)
 
-batch_size = 32
+batch_size = 320
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 val_loader = DataLoader(val_dataset, batch_size=batch_size)
 test_loader = DataLoader(test_dataset, batch_size=batch_size)
@@ -73,12 +73,16 @@ class SimpleNN(nn.Module):
         super(SimpleNN, self).__init__()
         self.layers = nn.Sequential(
             nn.Linear(input_size, 256),
+            nn.BatchNorm1d(256),  # Added batch normalization
             nn.ReLU(),
             nn.Dropout(0.5),
+            
             nn.Linear(256, 128),
+            nn.BatchNorm1d(128),  # Added batch normalization
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(128, num_classes)
+            
+            nn.Linear(128, num_classes)  # Removed softmax
         )
         
     def forward(self, x):
@@ -96,8 +100,8 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 model = model.to(device)
 
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.001)
-scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)
+optimizer = optim.Adam(model.parameters(), lr=0.0005)
+# scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=5)
 
 # ---------------------------------------------------
 # 4. Training Loop with Early Stopping
@@ -106,48 +110,7 @@ best_val_loss = float('inf')
 patience = 10
 patience_counter = 0
 
-for epoch in tqdm.tqdm(range(100)):
-    # Training
-    model.train()
-    train_loss = 0.0
-    for inputs, labels in train_loader:
-        inputs, labels = inputs.to(device), labels.to(device)
-        
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item() * inputs.size(0)
-    
-    # Validation
-    model.eval()
-    val_loss = 0.0
-    with torch.no_grad():
-        for inputs, labels in val_loader:
-            inputs, labels = inputs.to(device), labels.to(device)
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
-            val_loss += loss.item() * inputs.size(0)
-    
-    # Update learning rate
-    scheduler.step(val_loss)
-    
-    # Early stopping check
-    if val_loss < best_val_loss:
-        best_val_loss = val_loss
-        patience_counter = 0
-        torch.save(model.state_dict(), 'best_model_simple.pth')
-    else:
-        patience_counter += 1
-    
-    if patience_counter >= patience:
-        print(f"Early stopping at epoch {epoch+1}")
-        break
 
-# ---------------------------------------------------
-# 5. Evaluation
-# ---------------------------------------------------
 def evaluate_model(model, loader):
     model.eval()
     all_preds = []
@@ -157,14 +120,80 @@ def evaluate_model(model, loader):
         for inputs, labels in loader:
             inputs = inputs.to(device)
             outputs = model(inputs)
+            # print(outputs)
             _, preds = torch.max(outputs, 1)
             all_preds.extend(preds.cpu().numpy())
             all_labels.extend(labels.numpy())
     
     return all_labels, all_preds
 
-# Load best model
-model.load_state_dict(torch.load('best_model_simple.pth'))
+
+for epoch in tqdm.tqdm(range(100)):
+    # Training
+    model.train()
+    train_loss = 0.0
+    for inputs, labels in train_loader:
+        inputs, labels = inputs.to(device), labels.to(device)
+    
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        
+        # Add gradient clipping
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
+        optimizer.step()
+        train_loss += loss.item()
+        print(f'entered train loader fro epoch: {epoch}')
+    
+    # Validation
+    model.eval()
+    val_loss = 0.0
+    with torch.no_grad():
+        for inputs, labels in val_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            val_loss += loss.item()
+    
+    # Update learning rate
+    # scheduler.step(val_loss)
+    print(f"Epoch: {epoch}, Train loss: {train_loss}, Val loss: {val_loss}")
+
+    if (not(epoch % 5)) & (epoch != 0):
+        test_labels, test_preds = evaluate_model(model, test_loader)
+        accuracy = accuracy_score(test_labels, test_preds)
+        recall = recall_score(test_labels, test_preds, average='macro')
+        f1 = f1_score(test_labels, test_preds, average='macro')
+        cm = confusion_matrix(test_labels, test_preds)
+        print(f"\nTest Metrics:")
+        print(f"Accuracy: {accuracy:.4f}")
+        print(f"Recall:   {recall:.4f}")
+        print(f"F1-Score: {f1:.4f}")
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+        plt.xlabel('Predicted')
+        plt.ylabel('True')
+        plt.title('Confusion Matrix')
+        plt.savefig(f'fnn_cm_pics/epoch_{epoch}.png')
+        # plt.show()
+        print('--------------------------')
+    
+    # Early stopping check
+    # if val_loss < best_val_loss:
+    #     best_val_loss = val_loss
+    #     patience_counter = 0
+    #     torch.save(model.state_dict(), 'best_model_simple.pth')
+    # else:
+    #     patience_counter += 1
+    
+    # if patience_counter >= patience:
+    #     print(f"Early stopping at epoch {epoch+1}")
+    #     break
+
+
+# model.load_state_dict(torch.load('best_model_simple.pth'))
 
 # Test evaluation
 test_labels, test_preds = evaluate_model(model, test_loader)
@@ -186,4 +215,5 @@ sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 plt.xlabel('Predicted')
 plt.ylabel('True')
 plt.title('Confusion Matrix')
-plt.show()
+# plt.show()
+plt.savefig('fnn_cm_pics/final.png')
