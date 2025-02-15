@@ -47,7 +47,10 @@ class VideoDataset(Dataset):
         return len(self.videos)
     
     def __getitem__(self, idx):
-        return self.videos[idx], self.labels[idx]
+        video = self.videos[idx]
+        video = torch.tensor(video).mean(-1)  # Ensures compatibility with both NumPy and Torch tensors
+        return video, self.labels[idx]
+
 
 batch_size = 32
 dataloaders = {
@@ -58,16 +61,15 @@ dataloaders = {
 
 # Transformer-based model
 class TransformerClassifier(nn.Module):
-    def __init__(self, input_dim=64, seq_len=400, feature_dim=21, num_classes=5, num_heads=4, num_layers=2):
+    def __init__(self, input_dim=21, seq_len=400, num_classes=5, num_heads=4, num_layers=2):
         super(TransformerClassifier, self).__init__()
-        self.embedding = nn.Linear(input_dim * feature_dim, 128)
+        self.embedding = nn.Linear(input_dim, 128)
         encoder_layer = nn.TransformerEncoderLayer(d_model=128, nhead=num_heads, dim_feedforward=256)
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
         self.fc = nn.Linear(128, num_classes)
     
     def forward(self, x):
         batch_size = x.shape[0]
-        x = x.view(batch_size, x.shape[1], -1)  # Flatten (21, 64) -> (21*64)
         x = self.embedding(x)  # (batch, seq_len, embed_dim)
         x = x.permute(1, 0, 2)  # Required shape (seq_len, batch, embed_dim)
         x = self.transformer(x)
