@@ -12,7 +12,7 @@ from sklearn.metrics import confusion_matrix, accuracy_score, recall_score, f1_s
 import seaborn as sns
 
 
-NPY_ADDRESS = "./data/stmae_v2.npy_943MB/stmae_embeddings_pd_4.npy"
+NPY_ADDRESS =  "../../Datasets/stmae_embeddings_pd_4.npy"
 
 with open(NPY_ADDRESS, 'rb') as f:
     data = np.load(NPY_ADDRESS, allow_pickle=True) 
