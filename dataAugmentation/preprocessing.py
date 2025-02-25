@@ -4,10 +4,39 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader, Dataset
+import random
+import math
 
 NPY_ADDRESS         = "./data/stmae_embeddings_pd_5.npy"
 LEFT_DATA_ADDRESS   = "./data/left_best_segments_and_indexes.csv"
 RIGHT_DATA_ADDRESS  = "./data/right_best_segments_and_indexes.csv"
+SHUFFLED_DATA_RATIO = 3
+
+
+def shuffle_tuples_list(tuples_list, number_of_shuffles):
+    print(len(tuples_list))
+    shuffles = []
+    shuffles_num = number_of_shuffles
+    len_tuple = len(tuples_list)
+    
+    if number_of_shuffles > math.factorial(len_tuple-2):
+        shuffles_num = math.factorial(len_tuple-2)   
+
+    if len(tuples_list) <= 3:
+        return []
+    
+    while len(shuffles) < shuffles_num:
+        temp_list = tuples_list[:]
+        
+        # Extract the elements to shuffle (excluding the first and last elements)
+        middle_section = temp_list[1:-1]
+        random.shuffle(middle_section)
+        shuffled_list = [temp_list[0]] + middle_section + [temp_list[-1]]
+        
+        if shuffled_list not in shuffles and shuffled_list != tuples_list:
+            shuffles.append(shuffled_list)
+    
+    return shuffles
 
 
 with open(NPY_ADDRESS, 'rb') as f:
@@ -77,5 +106,34 @@ df_left = pd.DataFrame({'file_name': left_tap_file_names, 'tap_indices': tuples_
 df_right = pd.DataFrame({'file_name': right_tap_file_names, 'tap_indices': tuples_list_right, 'label': [1 for _ in range(len(tuples_list_left))]})
 
 
-df_left.to_csv('./left_test.csv')
-df_right.to_csv('./right_test.csv')
+tmp_df_column_names = ['file_name', 'tap_indices', 'label']
+tmp_df_left = pd.DataFrame(columns=tmp_df_column_names)
+tmp_df_right = pd.DataFrame(columns=tmp_df_column_names)
+
+for index, row in df_left.iterrows():
+    print(index, row['file_name'])
+    file_name = row['file_name']
+    tap_indices = row['tap_indices']
+    shuffled_tap_indices = shuffle_tuples_list(tap_indices, SHUFFLED_DATA_RATIO)
+    new_row = {'file_name': file_name, 'tap_indices': tap_indices, 'label': 1}
+    tmp_df_left = pd.concat([tmp_df_left, pd.DataFrame([new_row])], ignore_index=True)
+    for shuffled in shuffled_tap_indices:
+        new_row = {'file_name': file_name, 'tap_indices': shuffled, 'label': 0}
+        tmp_df_left = pd.concat([tmp_df_left, pd.DataFrame([new_row])], ignore_index=True)
+    
+for index, row in df_right.iterrows():
+    print(index, row['file_name'])
+    file_name = row['file_name']
+    tap_indices = row['tap_indices']
+    shuffled_tap_indices = shuffle_tuples_list(tap_indices, SHUFFLED_DATA_RATIO)
+    new_row = {'file_name': file_name, 'tap_indices': tap_indices, 'label': 1}
+    tmp_df_right = pd.concat([tmp_df_right, pd.DataFrame([new_row])], ignore_index=True)
+    for shuffled in shuffled_tap_indices:
+        new_row = {'file_name': file_name, 'tap_indices': shuffled, 'label': 0}
+        tmp_df_right = pd.concat([tmp_df_right, pd.DataFrame([new_row])], ignore_index=True)
+    
+
+tmp_df_left.to_csv('./left_test.csv')
+tmp_df_right.to_csv('./right_test.csv')
+
+
