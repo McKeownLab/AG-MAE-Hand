@@ -42,9 +42,10 @@ data_embeddings = data_embeddings.view(data_embeddings.shape[0], data_embeddings
 print(data_embeddings.shape)  # Output should be (460, 400, 48)
 
 
-embeddings_list_left_all = []
-embeddings_list_right_all = []
-
+indices_not_found_left = []
+indices_not_found_right = []
+left_embeddings_shuffled_df = pd.DataFrame({'file_name': [], 'tap_indices': [], 'label': [], 'embeddings': []})
+right_embeddings_shuffled_df = pd.DataFrame({'file_name': [], 'tap_indices': [], 'label': [], 'embeddings': []})
 
 # convert data_embeddings back to a normal list
 if data_embeddings.is_cuda:
@@ -53,20 +54,23 @@ data_embeddings = data_embeddings.numpy()
 data_embeddings = data_embeddings.tolist()
 
 error_count_left = 0
+error_count_right = 0
+
 for index, row in df_left.iterrows():
     embeddings_list_left = []
     tap_indices = row['tap_indices']
     file_name = row['file_name']
+    label = row['label']
     
     try:
         file_name_index = data_indices.index(file_name)
         file_name_embeddings = data_embeddings[file_name_index]
     except ValueError:
-        error_count_left += 1  # Increment the error counter
+        indices_not_found_left.append(file_name)
+        error_count_left += 1  
         continue
     
     tap_indices = ast.literal_eval(tap_indices)
-    # print(len(tap_indices))
     
     for start, end in tap_indices:
         if start == end:
@@ -74,9 +78,38 @@ for index, row in df_left.iterrows():
         else:
             embeddings_list_left.extend(file_name_embeddings[start:end+1])
     
-    embeddings_list_left_all.append(embeddings_list_left)
+    new_row = {'file_name': file_name, 'tap_indices': tap_indices, 'label': label, 'embeddings': embeddings_list_left}
+    left_embeddings_shuffled_df = pd.concat([left_embeddings_shuffled_df, pd.DataFrame([new_row])], ignore_index=True)
+
     
-    # print(len(embeddings_list_left))    
-    # x = input('interrupt: ')
-print(f"Number of items not found in data_indices: {error_count_left}")
-print(len(embeddings_list_left_all))
+    
+for index, row in df_right.iterrows():
+    embeddings_list_right = []
+    tap_indices = row['tap_indices']
+    file_name = row['file_name']
+    label = row['label']
+    
+    try:
+        file_name_index = data_indices.index(file_name)
+        file_name_embeddings = data_embeddings[file_name_index]
+    except ValueError:
+        indices_not_found_right.append(file_name)
+        error_count_right += 1 
+        continue
+    
+    tap_indices = ast.literal_eval(tap_indices)
+    
+    for start, end in tap_indices:
+        if start == end:
+            embeddings_list_right.append(file_name_embeddings[start])
+        else:
+            embeddings_list_right.extend(file_name_embeddings[start:end+1])
+    
+    new_row = {'file_name': file_name, 'tap_indices': tap_indices, 'label': label, 'embeddings': embeddings_list_right}
+    right_embeddings_shuffled_df = pd.concat([right_embeddings_shuffled_df, pd.DataFrame([new_row])], ignore_index=True)
+    
+    
+print(indices_not_found_right)
+right_embeddings_shuffled_df.to_excel('./right_embeddings_shuffled.xlsx')
+right_embeddings_shuffled_df.to_csv('./right_embeddings_shuffled.csv')
+print(f"Number of items not found in data_indices: {error_count_right}")
