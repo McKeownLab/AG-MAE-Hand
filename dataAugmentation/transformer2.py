@@ -7,6 +7,7 @@ import numpy as np
 import ast
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
+import matplotlib.pyplot as plt
 
 # -------------------------------
 # 1. Data Loading & Preprocessing
@@ -145,6 +146,8 @@ num_epochs = 50
 # 4. Training Loop
 # -------------------------------
 
+train_losses, val_losses = [], []
+
 for epoch in range(num_epochs):
     model.train()
     train_loss = 0.0
@@ -171,6 +174,8 @@ for epoch in range(num_epochs):
     
     train_loss /= total_train
     train_acc = correct_train / total_train
+    train_losses.append(train_loss)
+    
     
     # Validation phase
     model.eval()
@@ -197,6 +202,8 @@ for epoch in range(num_epochs):
     
     val_loss /= total_val
     val_acc = correct_val / total_val
+    
+    val_losses.append(val_loss)
     
     # Step the scheduler based on validation loss
     scheduler.step(val_loss)
@@ -234,3 +241,12 @@ test_loss /= total_test
 test_acc = correct_test / total_test
 print("Test Loss:", test_loss)
 print("Test Accuracy:", test_acc)
+
+
+plt.plot(range(1, num_epochs + 1), train_losses, label='Train Loss')
+plt.plot(range(1, num_epochs + 1), val_losses, label='Validation Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Learning Curve')
+plt.legend()
+plt.show()
