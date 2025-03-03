@@ -8,6 +8,19 @@ import ast
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
+import wandb
+
+
+wandb.init(entity="irania-university-of-british-columbia", project="Transformer-Augmented-Data-Detection", config={
+    "batch_size": 32,
+    "learning_rate": 1e-4,
+    "num_epochs": 50,
+    "nhead": 4,
+    "num_layers": 3,
+    "ff_dim": 128,
+    "dropout": 0.2
+})
+config = wandb.config
 
 # -------------------------------
 # 1. Data Loading & Preprocessing
@@ -56,14 +69,14 @@ class EmbeddingsDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 # Create DataLoaders
-batch_size = 32
+# batch_size = 32
 train_dataset = EmbeddingsDataset(X_train, y_train)
 val_dataset   = EmbeddingsDataset(X_val, y_val)
 test_dataset  = EmbeddingsDataset(X_test, y_test)
 
-train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-val_loader   = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-test_loader  = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=config.batch_size, shuffle=True)
+val_loader   = DataLoader(val_dataset, batch_size=config.batch_size, shuffle=False)
+test_loader  = DataLoader(test_dataset, batch_size=config.batch_size, shuffle=False)
 
 # -------------------------------
 # 2. Model Building: Transformer-Based Classifier
@@ -87,7 +100,7 @@ class PositionalEncoding(nn.Module):
 
 # Define the Transformer classifier model
 class TransformerClassifier(nn.Module):
-    def __init__(self, d_model=48, nhead=4, num_layers=3, ff_dim=128, dropout=0.2, seq_length=400):
+    def __init__(self, d_model=48, nhead=config.nhead, num_layers=config.num_layers, ff_dim=config.ff_dim, dropout=config.dropout, seq_length=400):
         super(TransformerClassifier, self).__init__()
         self.pos_encoder = PositionalEncoding(d_model, max_len=seq_length)
         
@@ -137,10 +150,10 @@ model = TransformerClassifier().to(device)
 pos_weight = torch.tensor([3.0], device=device)
 criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 
-optimizer = optim.Adam(model.parameters(), lr=1e-4)
+optimizer = optim.Adam(model.parameters(), lr=config.learning_rate)
 scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=3)
 
-num_epochs = 50
+# num_epochs = 50
 
 # -------------------------------
 # 4. Training Loop
@@ -148,7 +161,7 @@ num_epochs = 50
 
 train_losses, val_losses = [], []
 
-for epoch in range(num_epochs):
+for epoch in range(config.num_epochs):
     model.train()
     train_loss = 0.0
     correct_train = 0
@@ -208,13 +221,21 @@ for epoch in range(num_epochs):
     # Step the scheduler based on validation loss
     scheduler.step(val_loss)
     
-    print(f"Epoch {epoch+1}/{num_epochs} - Train Loss: {train_loss:.4f} - Train Acc: {train_acc:.4f} - "
+    wandb.log({"Train Loss": train_loss / total_train, "Train Acc": train_acc,
+               "Val Loss": val_loss / total_val, "Val Acc": val_acc})
+    print(f"Epoch {epoch+1}/{config.num_epochs} - Train Loss: {train_loss:.4f} - Train Acc: {train_acc:.4f} - "
           f"Val Loss: {val_loss:.4f} - Val Acc: {val_acc:.4f}")
     
     if (epoch + 1) % 5 == 0:
         cm = confusion_matrix(all_labels, all_preds)
         print(f"\nConfusion Matrix at epoch {epoch+1}:")
         print(cm)
+        # wandb.log({"Confusion Matrix": wandb.plot.confusion_matrix(probs=None, y_true=all_labels, preds=all_preds)})
+        wandb.log({"Confusion Matrix": wandb.plot.confusion_matrix(
+            probs=None, 
+            y_true=all_labels.tolist(),  # Convert NumPy array to list
+            preds=all_preds.tolist()      # Convert NumPy array to list
+        )})
 
 # -------------------------------
 # 5. Evaluation on Test Set
@@ -239,12 +260,14 @@ with torch.no_grad():
         
 test_loss /= total_test
 test_acc = correct_test / total_test
+
+wandb.log({"Test Loss": test_loss / total_test, "Test Acc": test_acc})
 print("Test Loss:", test_loss)
 print("Test Accuracy:", test_acc)
+wandb.finish()
 
-
-plt.plot(range(1, num_epochs + 1), train_losses, label='Train Loss')
-plt.plot(range(1, num_epochs + 1), val_losses, label='Validation Loss')
+plt.plot(range(1, config.num_epochs + 1), train_losses, label='Train Loss')
+plt.plot(range(1, config.num_epochs + 1), val_losses, label='Validation Loss')
 plt.xlabel('Epochs')
 plt.ylabel('Loss')
 plt.title('Learning Curve')
