@@ -231,11 +231,11 @@ for epoch in range(config.num_epochs):
         print(f"\nConfusion Matrix at epoch {epoch+1}:")
         print(cm)
         # wandb.log({"Confusion Matrix": wandb.plot.confusion_matrix(probs=None, y_true=all_labels, preds=all_preds)})
-        wandb.log({"Confusion Matrix": wandb.plot.confusion_matrix(
-            probs=None, 
-            y_true=all_labels.tolist(),  # Convert NumPy array to list
-            preds=all_preds.tolist()      # Convert NumPy array to list
-        )})
+        # wandb.log({"Confusion Matrix": wandb.plot.confusion_matrix(
+        #     probs=None, 
+        #     y_true=all_labels.tolist(),  # Convert NumPy array to list
+        #     preds=all_preds.tolist()      # Convert NumPy array to list
+        # )})
 
 # -------------------------------
 # 5. Evaluation on Test Set
