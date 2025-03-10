@@ -35,7 +35,7 @@ for filename in os.listdir(CSV_FOLDER):
         file_base_name = filename.rsplit('.', 1)[0]  # Remove .csv extension
         # print(file_base_name)
         
-        file_base_name = file_base_name.replace('_finger_tapping', '')
+        # file_base_name = file_base_name.replace('_finger_tapping', '')
         # Find corresponding label
         if file_base_name in data_indices:
             label_index = data_indices.index(file_base_name)
