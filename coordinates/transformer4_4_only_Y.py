@@ -6,6 +6,57 @@ import numpy as np
 from sklearn.metrics import confusion_matrix
 import matplotlib.pyplot as plt
 
+
+def augment_jittering(coordinates, sigma=0.01):
+    """
+    Adds Gaussian noise to the coordinates.
+    :param coordinates: np.array of shape (n_frames, 3, 21)
+    :param sigma: standard deviation of the Gaussian noise
+    :return: augmented coordinates of the same shape
+    """
+    noise = np.random.normal(loc=0.0, scale=sigma, size=coordinates.shape)
+    return coordinates + noise
+
+
+split_file = "data/train_val_test_splits.npy"
+splits = np.load(split_file, allow_pickle=True)
+split0 = splits[0]
+train_data = split0["train"]
+val_data = split0["val"]
+test_data = split0["test"]
+
+# -------------------------------
+# 2. Data Augmentation on Training Set (Jittering)
+# -------------------------------
+# We will create 4 augmented versions for each original sample.
+aug_train_file_names = []
+aug_train_labels = []
+aug_train_coordinates = []
+
+# Loop over the training set samples
+for file_name, label, coords in zip(train_data["file_names"], train_data["labels"], train_data["coordinates"]):
+    # Add the original sample
+    aug_train_file_names.append(file_name)
+    aug_train_labels.append(label)
+    aug_train_coordinates.append(coords)
+    # Create 4 augmented copies with jittering noise
+    for i in range(4):
+        new_coords = augment_jittering(coords, sigma=0.01)  # Adjust sigma as needed
+        new_file_name = f"{file_name}_aug{i+1}"
+        aug_train_file_names.append(new_file_name)
+        aug_train_labels.append(label)
+        aug_train_coordinates.append(new_coords)
+
+# Create a new training dictionary with the augmented data
+train_data_aug = {
+    "file_names": np.array(aug_train_file_names),
+    "labels": np.array(aug_train_labels),
+    "coordinates": np.array(aug_train_coordinates, dtype=object)
+}
+
+print("Original train set size:", len(train_data["file_names"]))
+print("Augmented train set size:", len(train_data_aug["file_names"]))
+
 # -------------------------------
 # Hyperparameters
 # -------------------------------
@@ -18,7 +69,7 @@ ff_dim = 128
 dropout = 0.2
 max_frames = 500         # Fixed number of frames per video
 d_model = 48             # Transformer model dimension
-input_dim = 3 * 21       # Raw frame feature dimension (3,21 -> 63)
+input_dim = 1 * 4       # Raw frame feature dimension (3,4 -> 12)
 num_classes = 4          # Classes: 0, 1, 2, 3
 
 # -------------------------------
@@ -43,6 +94,7 @@ class VideoDataset(Dataset):
         self.labels = labels
         self.coordinates = coordinates
         self.max_frames = max_frames
+        self.selected_indices = [0, 1, 4, 8]  # Keep only these 4 landmarks
 
     def __len__(self):
         return len(self.file_names)
@@ -51,16 +103,20 @@ class VideoDataset(Dataset):
         coords = self.coordinates[idx]  # shape: (n_frames, 3, 21)
         n_frames = coords.shape[0]
         
+        coords = coords[:, 1, :]
+        
+        coords = coords[:, self.selected_indices]
+        
         # Truncate if more than max_frames
         if n_frames > self.max_frames:
-            coords = coords[:self.max_frames, :, :]
+            coords = coords[:self.max_frames, :]
         # Pad if less than max_frames
         elif n_frames < self.max_frames:
             pad_frames = self.max_frames - n_frames
-            pad_array = np.zeros((pad_frames, coords.shape[1], coords.shape[2]), dtype=coords.dtype)
+            pad_array = np.zeros((pad_frames, coords.shape[1]), dtype=coords.dtype)
             coords = np.concatenate([coords, pad_array], axis=0)
         
-        # Now coords is (max_frames, 3, 21); flatten each frame to get shape (max_frames, 63)
+        # Now coords is (max_frames, 3, 4); flatten each frame to get shape (max_frames, 12)
         coords = coords.reshape(self.max_frames, -1)
         
         # Convert to torch tensor
@@ -71,7 +127,7 @@ class VideoDataset(Dataset):
         return coords, label
 
 # Create dataset instances
-train_dataset = VideoDataset(train_data["file_names"], train_data["labels"], train_data["coordinates"], max_frames=max_frames)
+train_dataset = VideoDataset(train_data_aug["file_names"], train_data_aug["labels"], train_data_aug["coordinates"], max_frames=max_frames)
 val_dataset   = VideoDataset(val_data["file_names"], val_data["labels"], val_data["coordinates"], max_frames=max_frames)
 test_dataset  = VideoDataset(test_data["file_names"], test_data["labels"], test_data["coordinates"], max_frames=max_frames)
 

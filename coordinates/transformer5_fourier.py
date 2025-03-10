@@ -18,8 +18,12 @@ ff_dim = 128
 dropout = 0.2
 max_frames = 500         # Fixed number of frames per video
 d_model = 48             # Transformer model dimension
-input_dim = 3 * 21       # Raw frame feature dimension (3,21 -> 63)
+input_dim = 63           # Raw frame feature dimension (3*21 -> 63)
 num_classes = 4          # Classes: 0, 1, 2, 3
+use_fft = True           # Set True to use Fourier transform on the landmarks
+
+# If using FFT, the sequence length becomes:
+seq_length = (max_frames // 2 + 1) if use_fft else max_frames
 
 # -------------------------------
 # 1. Load Train/Val/Test Data
@@ -35,14 +39,16 @@ test_data = split0["test"]
 # 2. Create a Custom Dataset Class
 # -------------------------------
 class VideoDataset(Dataset):
-    def __init__(self, file_names, labels, coordinates, max_frames=max_frames):
+    def __init__(self, file_names, labels, coordinates, max_frames=max_frames, use_fft=False):
         """
         coordinates: list of np.arrays, each of shape (n_frames, 3, 21)
+        use_fft: if True, apply FFT along the temporal dimension and use the magnitude.
         """
         self.file_names = file_names
         self.labels = labels
         self.coordinates = coordinates
         self.max_frames = max_frames
+        self.use_fft = use_fft
 
     def __len__(self):
         return len(self.file_names)
@@ -63,6 +69,13 @@ class VideoDataset(Dataset):
         # Now coords is (max_frames, 3, 21); flatten each frame to get shape (max_frames, 63)
         coords = coords.reshape(self.max_frames, -1)
         
+        if self.use_fft:
+            # Apply real FFT along the time axis (axis=0)
+            fft_coords = np.fft.rfft(coords, axis=0)  # shape: (max_frames//2+1, 63)
+            # Use the magnitude (absolute value) of the FFT coefficients
+            coords = np.abs(fft_coords)
+            # After FFT, the sequence length changes to max_frames//2 + 1
+        
         # Convert to torch tensor
         coords = torch.tensor(coords, dtype=torch.float32)
         # For CrossEntropyLoss, labels should be Long tensors (and not one-hot)
@@ -70,10 +83,13 @@ class VideoDataset(Dataset):
         
         return coords, label
 
-# Create dataset instances
-train_dataset = VideoDataset(train_data["file_names"], train_data["labels"], train_data["coordinates"], max_frames=max_frames)
-val_dataset   = VideoDataset(val_data["file_names"], val_data["labels"], val_data["coordinates"], max_frames=max_frames)
-test_dataset  = VideoDataset(test_data["file_names"], test_data["labels"], test_data["coordinates"], max_frames=max_frames)
+# Create dataset instances (with FFT transformation if use_fft is True)
+train_dataset = VideoDataset(train_data["file_names"], train_data["labels"], train_data["coordinates"], 
+                             max_frames=max_frames, use_fft=use_fft)
+val_dataset   = VideoDataset(val_data["file_names"], val_data["labels"], val_data["coordinates"], 
+                             max_frames=max_frames, use_fft=use_fft)
+test_dataset  = VideoDataset(test_data["file_names"], test_data["labels"], test_data["coordinates"], 
+                             max_frames=max_frames, use_fft=use_fft)
 
 # Create dataloaders
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
@@ -98,7 +114,7 @@ class PositionalEncoding(nn.Module):
         return x + self.pe[:, :x.size(1)]
 
 class TransformerClassifier(nn.Module):
-    def __init__(self, input_dim=63, d_model=48, nhead=4, num_layers=3, ff_dim=128, dropout=0.2, seq_length=max_frames, num_classes=4):
+    def __init__(self, input_dim=63, d_model=48, nhead=4, num_layers=3, ff_dim=128, dropout=0.2, seq_length=seq_length, num_classes=4):
         super(TransformerClassifier, self).__init__()
         self.input_proj = nn.Linear(input_dim, d_model)
         self.pos_encoder = PositionalEncoding(d_model, max_len=seq_length)
@@ -120,10 +136,13 @@ class TransformerClassifier(nn.Module):
         self.relu = nn.ReLU()
 
     def forward(self, x):
+        # x shape: (batch, seq_length, input_dim)
         x = self.input_proj(x)
         x = self.pos_encoder(x)
+        # Transformer expects (seq_length, batch, d_model)
         x = x.transpose(0, 1)
         x = self.transformer_encoder(x)
+        # Average pooling over the sequence dimension
         x = x.mean(dim=0)
         x = self.fc1(x)
         x = self.ln1(x)
@@ -139,7 +158,7 @@ class TransformerClassifier(nn.Module):
 # -------------------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = TransformerClassifier(input_dim=input_dim, d_model=d_model, nhead=nhead, num_layers=num_layers,
-                              ff_dim=ff_dim, dropout=dropout, seq_length=max_frames, num_classes=num_classes).to(device)
+                              ff_dim=ff_dim, dropout=dropout, seq_length=seq_length, num_classes=num_classes).to(device)
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=learning_rate)
@@ -249,7 +268,6 @@ plt.title("Learning Curve")
 plt.legend()
 plt.show()
 
-
 # -------------------------------
 # 7. Confusion Matrix for Test Set
 # -------------------------------
@@ -296,4 +314,3 @@ for i in range(test_cm.shape[0]):
 
 plt.tight_layout()
 plt.show()
-

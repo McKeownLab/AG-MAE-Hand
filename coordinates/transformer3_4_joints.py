@@ -18,7 +18,7 @@ ff_dim = 128
 dropout = 0.2
 max_frames = 500         # Fixed number of frames per video
 d_model = 48             # Transformer model dimension
-input_dim = 3 * 21       # Raw frame feature dimension (3,21 -> 63)
+input_dim = 3 * 4       # Raw frame feature dimension (3,4 -> 12)
 num_classes = 4          # Classes: 0, 1, 2, 3
 
 # -------------------------------
@@ -43,6 +43,7 @@ class VideoDataset(Dataset):
         self.labels = labels
         self.coordinates = coordinates
         self.max_frames = max_frames
+        self.selected_indices = [0, 1, 4, 8]  # Keep only these 4 landmarks
 
     def __len__(self):
         return len(self.file_names)
@@ -50,6 +51,8 @@ class VideoDataset(Dataset):
     def __getitem__(self, idx):
         coords = self.coordinates[idx]  # shape: (n_frames, 3, 21)
         n_frames = coords.shape[0]
+        
+        coords = coords[:, :, self.selected_indices]
         
         # Truncate if more than max_frames
         if n_frames > self.max_frames:
@@ -60,7 +63,7 @@ class VideoDataset(Dataset):
             pad_array = np.zeros((pad_frames, coords.shape[1], coords.shape[2]), dtype=coords.dtype)
             coords = np.concatenate([coords, pad_array], axis=0)
         
-        # Now coords is (max_frames, 3, 21); flatten each frame to get shape (max_frames, 63)
+        # Now coords is (max_frames, 3, 4); flatten each frame to get shape (max_frames, 12)
         coords = coords.reshape(self.max_frames, -1)
         
         # Convert to torch tensor
