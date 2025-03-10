@@ -167,4 +167,5 @@ cython_debug/
 *.wandb
 *.pth
 *.png
+*.zip
 experiments/
