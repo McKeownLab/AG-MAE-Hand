@@ -8,28 +8,33 @@ def jittering(input_finger_tapping):
     return input_finger_tapping_jittered
 
 
-def draw_plot_finger_tap(input_coordinates, person_id, applied_augmentation = 'No'):
-
+def draw_plot_finger_tap(input_coordinates, person_id, applied_augmentation='No'):
     input_finger_tapping = np.array(input_coordinates[person_id])
-    if(applied_augmentation == "Jittering"):
+    
+    if applied_augmentation == "Jittering":
         input_finger_tapping = jittering(input_finger_tapping)
     
-
-    joint_4 = np.array(input_finger_tapping[:, :, 4]) 
+    joint_4 = np.array(input_finger_tapping[:, :, 4])
     joint_8 = np.array(input_finger_tapping[:, :, 8])
-
+    
     distance = np.linalg.norm(joint_8 - joint_4, axis=1)
-
-
+    
+  
+    min_val = np.min(distance)
+    max_val = np.max(distance)
+    if max_val != min_val:
+        normalized_distance = (distance - min_val) / (max_val - min_val)
+    else:
+        normalized_distance = distance 
+    
     plt.figure(figsize=(10, 6))
-    plt.plot(distance, label='Euclidean Distance')
-    plt.title(f'Euclidean Distance between Joint 4 and Joint 8 over Time for person with id {person_id} with {applied_augmentation} Augmentation')
+    plt.plot(normalized_distance, label='Normalized Euclidean Distance')
+    plt.title(f'Normalized Euclidean Distance between Joint 4 and Joint 8 over Time for Person ID {person_id} with {applied_augmentation} Augmentation')
     plt.xlabel('Frame')
-    plt.ylabel('Euclidean Distance')
+    plt.ylabel('Normalized Euclidean Distance')
     plt.legend()
     plt.grid(True)
-    plt.show()   
-
+    plt.show()
 
 
 
