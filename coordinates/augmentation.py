@@ -36,18 +36,44 @@ def draw_plot_finger_tap(input_coordinates, person_id, applied_augmentation='No'
     plt.grid(True)
     plt.show()
 
+def add_augmentation_data(new_train, train_data, index, ratio_augmentation, applied_augmentation):
 
+    for i in range(ratio_augmentation):
+        if applied_augmentation == "Jittering":       
+            new_train['coordinates'].append(jittering(train_data['coordinates'][index]))
+        new_train['labels'].append(train_data['labels'][index])
+        new_train['file_names'].append(train_data['file_names'][index])
+
+def create_new_dataset(applied_augmentation, splits, ratio_augmentation, path_new_npy):
+
+    new_split_sets = []
+    
+    for i in range(len(splits)):
+        train_data = splits[i]['train']
+        new_train = {"file_names": [], "labels": [], "coordinates": []}
+        new_train['coordinates'] = train_data['coordinates']
+
+        for j in range(len(train_data['coordinates'])):
+            add_augmentation_data(new_train, train_data, j, ratio_augmentation, applied_augmentation)
+        new_split_sets.append({
+            "train": new_train,
+            "val": splits[i]['val'],
+            "test": splits[i]['test']
+        })
+    np.save(path_new_npy, new_split_sets)
 
 split_file = "../../Datasets/train_val_test_splits.npy"
 splits = np.load(split_file, allow_pickle=True)
-split0 = splits[0]
+# split0 = splits[0]
 
 
-print(split0)
-train_data = split0["train"]
-val_data = split0["val"]
-test_data = split0["test"]
+# print(split0)
+# train_data = split0["train"]
+# val_data = split0["val"]
+# test_data = split0["test"]
 
-coordinates = train_data['coordinates']
-draw_plot_finger_tap(coordinates, 1, 'No')
-draw_plot_finger_tap(coordinates, 1, 'Jittering')
+# coordinates = train_data['coordinates']
+# draw_plot_finger_tap(coordinates, 1, 'No')
+# draw_plot_finger_tap(coordinates, 1, 'Jittering')
+
+create_new_dataset('Jittering', splits, 5, '../../Datasets/jittering.npy')
