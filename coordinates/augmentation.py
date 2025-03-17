@@ -1,5 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import random
 
 def jittering(input_finger_tapping):
 
@@ -7,12 +8,21 @@ def jittering(input_finger_tapping):
     input_finger_tapping_jittered = input_finger_tapping + jitter
     return input_finger_tapping_jittered
 
+def time_slicing(input_finger_tapping):
+
+    num_frames = input_finger_tapping.shape[0]
+    min_len = num_frames // 2 + 1
+    start = random.randint(0, num_frames - min_len)
+    end = random.randint(start + min_len, num_frames)
+    return input_finger_tapping[start:end]
 
 def draw_plot_finger_tap(input_coordinates, person_id, applied_augmentation='No'):
     input_finger_tapping = np.array(input_coordinates[person_id])
     
     if applied_augmentation == "Jittering":
         input_finger_tapping = jittering(input_finger_tapping)
+    if(applied_augmentation == "TimeSlicing"):
+        input_finger_tapping = time_slicing(input_finger_tapping)
     
     joint_4 = np.array(input_finger_tapping[:, :, 4])
     joint_8 = np.array(input_finger_tapping[:, :, 8])
@@ -41,6 +51,9 @@ def add_augmentation_data(new_train, train_data, index, ratio_augmentation, appl
     for i in range(ratio_augmentation):
         if applied_augmentation == "Jittering":       
             new_train['coordinates'].append(jittering(train_data['coordinates'][index]))
+        if applied_augmentation == "TimeSlicing":
+            new_train['coordinates'].append(time_slicing(train_data['coordinates'][index]))
+
         new_train['labels'].append(train_data['labels'][index])
         new_train['file_names'].append(train_data['file_names'][index])
 
@@ -62,18 +75,19 @@ def create_new_dataset(applied_augmentation, splits, ratio_augmentation, path_ne
         })
     np.save(path_new_npy, new_split_sets)
 
+
 split_file = "../../Datasets/train_val_test_splits.npy"
 splits = np.load(split_file, allow_pickle=True)
 # split0 = splits[0]
 
 
-# print(split0)
+# # print(split0)
 # train_data = split0["train"]
 # val_data = split0["val"]
 # test_data = split0["test"]
 
 # coordinates = train_data['coordinates']
 # draw_plot_finger_tap(coordinates, 1, 'No')
-# draw_plot_finger_tap(coordinates, 1, 'Jittering')
+# draw_plot_finger_tap(coordinates, 1, 'TimeSlicing')
 
-create_new_dataset('Jittering', splits, 5, '../../Datasets/jittering.npy')
+create_new_dataset('TimeSlicing', splits, 5, '../../Datasets/time_slicing.npy')
