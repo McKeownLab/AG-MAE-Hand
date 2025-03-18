@@ -24,7 +24,7 @@ num_classes = 2          # Classes: 0, 1
 # -------------------------------
 # 1. Load Train/Val/Test Data
 # -------------------------------
-split_file = "data/train_val_test_splits.npy"
+split_file = "data/slicing_10_1.npy"
 splits = np.load(split_file, allow_pickle=True)
 split0 = splits[0]
 train_data = split0["train"]
