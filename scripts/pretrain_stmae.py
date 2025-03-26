@@ -5,19 +5,15 @@ from tqdm import tqdm
 import omegaconf
 from omegaconf import OmegaConf
 import argparse
-
 import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix
 import seaborn as sns
-
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
 from torch.utils.data import DataLoader
 import torch.optim as optim
-
 from dataset.dataset import PreTrainingDataset, OfflineDataset, OnlineTrainingDataset
-
 import os
 import os.path as opt
 import sys
@@ -27,8 +23,8 @@ from model.stmae import STMAE, Encoder
 from utils.stmae_utils import stmae_training_loop
 from model.stgcn import STGCN
 from utils.stgcn_utils import valid_one_epoch, stgcn_offline_training_loop, stgcn_online_training_loop
-
 from anatomical_loss import AnatomicalLoss, get_data_stats, plot_data_stats
+import wandb
 
 
 def seed_everything(seed):
@@ -78,6 +74,54 @@ if __name__ == '__main__':
 		'joints_connections': data_args.joints_connections,
 		'label_map': data_args.label_map,
 	}
+
+
+	# Initialize WandB
+	wandb.init(
+		project="STMAE-Parkinson",
+		name=args.exp_name,  # Use the experiment name from the config
+		config={
+			# Experiment Config
+			"experiment_name": args.exp_name,
+			"seed": args.seed,
+			"dataset": args.dataset,
+			"save_folder_path": args.save_folder_path,
+			
+			# Data Config
+			"train_data_dir": args.data.train_data_dir,
+			"val_data_dir": args.data.val_data_dir,
+			"test_data_dir": args.data.test_data_dir,
+			"step": args.data.step,
+			"normalize": args.data.normalize,
+			"mean": args.data.mean,
+			"std": args.data.std,
+			"n_joints": args.data.n_joints,
+			"label_map": args.data.label_map,
+			"joints_connections": args.data.joints_connections,
+			
+			# STMAE Config
+			"stmae_num_joints": args.stmae.num_joints,
+			"stmae_coords_dim": args.stmae.coords_dim,
+			"stmae_encoder_embed_dim": args.stmae.encoder_embed_dim,
+			"stmae_encoder_depth": args.stmae.encoder_depth,
+			"stmae_num_heads": args.stmae.num_heads,
+			"stmae_mlp_dim": args.stmae.mlp_dim,
+			"stmae_decoder_dim": args.stmae.decoder_dim,
+			"stmae_decoder_depth": args.stmae.decoder_depth,
+			"stmae_window_size": args.stmae.window_size,
+			"stmae_masking_strategy": args.stmae.masking_strategy,
+			"stmae_spatial_masking_ratio": args.stmae.spatial_masking_ratio,
+			"stmae_temporal_masking_ratio": args.stmae.temporal_masking_ratio,
+			"stmae_anatomical_loss": args.stmae.anatomical_loss,
+			"stmae_root_index": args.stmae.root_index,
+			"stmae_num_epochs": args.stmae.num_epochs,
+			"stmae_lr": args.stmae.lr,
+			"stmae_weight_decay": args.stmae.weight_decay,
+			"stmae_batch_size": args.stmae.batch_size,
+
+		},
+	)
+
 
 	train_set = PreTrainingDataset(data_dir=data_args.train_data_dir,
 									 window_size=stmae_args.window_size,
@@ -151,96 +195,15 @@ if __name__ == '__main__':
 	n_params = sum(p.numel() for p in stmae.parameters() if p.requires_grad)
 	print("Number of trainable parameters of STMAE: ", n_params)
 
-	stmae_training_loop(stmae, train_loader, valid_loader, device, optimizer, scheduler, args)
+	stmae_training_loop(stmae, train_loader, valid_loader, device, optimizer, scheduler, wandb, args)
+ 	
+	# Log train-validation loss plot to WandB
+	sim_folder = f'{args.save_folder_path}/{args.dataset}/{args.exp_name}'
+	wandb.log({"train_loss_plot": wandb.Image(f'{sim_folder}/train_validation_loss_plot.png')})
+
+	# Save the trained model artifact
+	wandb.save(f'{sim_folder}/model.pth')
+	wandb.finish()
 
 
-	## SECOD PHASE: ONLINE TRAINING
-	print('\n\n', '='*15, 'FORTH PHASE: ONLINE TRAINING', '='*15)
-
-	## DATA SETS & LOADERS
-	print('\nLOADING DATA....')
-	data_args = args.data
-	stmae_args = args.stmae
-	stgcn_args = args.stgcn_online
-	train_set = OnlineTrainingDataset(data_dir=data_args.train_data_dir,
-									 window_size=stgcn_args.window_size,
-									 step=data_args.step,
-									 info=info,
-									 normalize=data_args.normalize) 
-
-	valid_set = OnlineTrainingDataset(data_dir=data_args.test_data_dir,
-									 window_size=stgcn_args.window_size,
-									 step=data_args.step,
-									 info=info,
-									 normalize=data_args.normalize)
-
-	print('# Train: {}, # Valid: {}'.format(len(train_set), len(valid_set)))
-	train_loader = DataLoader(train_set, batch_size=stgcn_args.batch_size, shuffle=True)
-	valid_loader = DataLoader(valid_set, batch_size=stgcn_args.batch_size, shuffle=False)
-
-
-	encoder = Encoder(
-				patch_num=stmae_args.num_joints*stmae_args.window_size,
-				patch_dim=stmae_args.coords_dim,
-				window_size=stmae_args.window_size,
-				num_classes=stmae_args.coords_dim,
-				dim=stmae_args.encoder_embed_dim,
-				depth=stmae_args.encoder_depth,
-				heads=stmae_args.num_heads,
-				mlp_dim=stmae_args.mlp_dim ,
-				pool = 'cls',
-				# channels = 3,
-				dim_head = 64,
-				dropout = 0.,
-				emb_dropout = 0.
-			)
-
-	stmae = STMAE(
-				encoder=encoder,
-				decoder_dim=stmae_args.decoder_dim,
-				decoder_depth=stmae_args.decoder_depth,
-				masking_strategy=stmae_args.masking_strategy,
-				spatial_masking_ratio=stmae_args.spatial_masking_ratio,
-				temporal_masking_ratio=stmae_args.temporal_masking_ratio,
-			)
-
-	stmae_chkpt = opt.join(args.save_folder_path, args.dataset, args.exp_name,'weights', 'best_stmae_model.pth')
-	if not opt.isfile(stmae_chkpt):
-		print(f"File not found: ", stmae_chkpt)
-		raise FileNotFoundError
-		
-	chkpt = torch.load(stmae_chkpt)
-	stmae.load_state_dict(chkpt['state_dict'])
-	stmae = stmae.to(device)
-	print('[optimal epoch={}]'.format(chkpt['epoch']))
-
-
-	print('\nBUILDING STGCN MODEL....')
-	graph_cfg = dict(layout=args.dataset,
-					 mode='spatial')
-	stgcn = STGCN(graph_cfg,
-				  in_channels=stmae_args.decoder_dim,
-				  base_channels=64,
-				  ch_ratio=2,
-				  num_stages=6,
-				  inflate_stages=[3, 5],
-				  down_stages=[3, 5],
-				  pretrained=None,
-				 gcn_with_res=False,
-				 task=stgcn_args.task,
-				 tcn_type='unit_tcn',
-				 num_classes=stgcn_args.num_classes,
-				 num_gesture_classes=1,
-				 ).to(device)
-
-
-	n_params = sum(p.numel() for p in stgcn.parameters() if p.requires_grad)
-	print("Number of trainable parameters of STGCN: ", n_params)
-
-
-	optimizer = optim.AdamW(stgcn.parameters(), lr=stgcn_args.lr)
-	scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=20)
-	criterion1 = nn.CrossEntropyLoss()
-	criterion2 = nn.BCELoss()
-
-	stgcn_online_training_loop(stgcn, stmae, train_loader, valid_loader, device, optimizer, criterion1, criterion2, scheduler, args)
+	
