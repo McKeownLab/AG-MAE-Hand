@@ -76,7 +76,7 @@ def create_new_dataset(applied_augmentation, splits, ratio_augmentation, path_ne
     np.save(path_new_npy, new_split_sets)
 
 
-split_file = "../../Datasets/train_val_test_splits.npy"
+split_file = "./data/train_val_test_splits.npy"
 splits = np.load(split_file, allow_pickle=True)
 # split0 = splits[0]
 
@@ -90,4 +90,5 @@ splits = np.load(split_file, allow_pickle=True)
 # draw_plot_finger_tap(coordinates, 1, 'No')
 # draw_plot_finger_tap(coordinates, 1, 'TimeSlicing')
 
-create_new_dataset('TimeSlicing', splits, 5, '../../Datasets/time_slicing.npy')
+create_new_dataset('TimeSlicing', splits, 10, './data/slicing_10_1.npy')
+# create_new_dataset('Jittering', splits, 10, './data/jittering_10_1.npy')
