@@ -10,7 +10,7 @@ import random
 
 BATCH_SIZE = 32
 SPLIT_INDEX = 0
-LEARNING_RATE = 0.0001
+LEARNING_RATE = 0.001
 
 def augment_sample(sample, noise_level=0.02):
 
@@ -19,7 +19,7 @@ def augment_sample(sample, noise_level=0.02):
     return (sample + noise).tolist()  # Convert back to list
 
 class SpatioFeaturesDataset(Dataset):
-    def __init__(self, data, mean=None, std=None, seq_length=400):
+    def __init__(self, data, mean=None, std=None, seq_length=100):
         self.data = data
         self.seq_length = seq_length
         self.mean = mean
@@ -38,7 +38,7 @@ class SpatioFeaturesDataset(Dataset):
             if len(x) > self.seq_length:
                 x = x[:self.seq_length]
             else:
-                x = np.pad(x, ((0, 400 - len(x)), (0, 0)), mode='constant', constant_values=0.0)
+                x = np.pad(x, ((0, 100 - len(x)), (0, 0)), mode='constant', constant_values=0.0)
 
             all_coordinates.append(x)
 
@@ -56,7 +56,7 @@ class SpatioFeaturesDataset(Dataset):
         if len(x) > self.seq_length:
             x = x[:self.seq_length]
         else:
-            x = np.pad(x, ((0, 400 - len(x)), (0, 0)), mode='constant', constant_values=0.0)
+            x = np.pad(x, ((0, 100 - len(x)), (0, 0)), mode='constant', constant_values=0.0)
 
         # Z-score normalization
         x = (x - self.mean) / (self.std + 1e-6)
@@ -76,7 +76,7 @@ class TransformerModel(nn.Module):
         self.output_dim = output_dim
 
         # Positional encoding
-        self.positional_encoding = nn.Parameter(torch.zeros(1, 400, input_dim))  # Assuming seq_length is 400
+        self.positional_encoding = nn.Parameter(torch.zeros(1, 100, input_dim))  # Assuming seq_length is 400
 
         # Transformer layers
         self.transformer = nn.Transformer(
