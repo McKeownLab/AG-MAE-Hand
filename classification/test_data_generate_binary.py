@@ -58,8 +58,8 @@ for label, file_name, pred in file_labels:
     label_left = file_labels[index][0]
     pred_left = file_labels[index][2]
     print(label_left)
-    if(count_labels[label] < 20 and count_labels[label_left] < 20):
-        if(label_left == label and count_labels[label] == 19):
+    if(count_labels[label] < 5 and count_labels[label_left] < 5):
+        if(label_left == label and count_labels[label] == 4):
             continue
         test_file.append((file_name, label, pred))
         test_file.append((file_name.replace('right', 'left'), label_left, pred_left))
